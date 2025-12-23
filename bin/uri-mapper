@@ -1,3 +1,4 @@
+#!/usr/bin/env php
 <?php
 
 /**
@@ -26,7 +27,7 @@ if ($argc < 2) {
     fwrite(
         STDERR,
         "Usage: php uri-mapper.php <path> [--php] [--index] [--ra] [--strict] [--dry-run] [--json]\n" .
-            "\033[1;30mdoc: https://github.com/erilshackle/php-uri-mapper/README\033[0m"
+            "\033[1;30mdoc: https://github.com/erilshackle/php-uri-mapper\033[0m"
     );
     exit(1);
 }

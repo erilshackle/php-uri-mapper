@@ -13,7 +13,7 @@
         "php": ">=8.1"
     },
     "bin": [
-        "bin/uri-mapper.php"
+        "bin/uri-mapper"
     ],
     "autoload": {
         "psr-4": {

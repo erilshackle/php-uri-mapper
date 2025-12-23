@@ -1,0 +1,38 @@
+{
+    "name": "eril/uri-mapper",
+    "description": "A lightweight CLI tool to generate a named URI catalog from the filesystem, with stable IDs, aliases, and optional recursive index mapping.",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Eril TS Carvalho",
+            "email": "erilandocarvalho@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=8.1"
+    },
+    "bin": [
+        "bin/uri-mapper.php"
+    ],
+    "autoload": {
+        "psr-4": {
+            "UriMapper\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "UriMapper\\Dev\\": "dev/"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "keywords": [
+        "uri",
+        "routing",
+        "filesystem",
+        "cli",
+        "mapper",
+        "php"
+    ]
+}

@@ -1,0 +1,335 @@
+<?php
+
+/**
+ * URI Mapper
+ *
+ * Generates a named URI catalog from the filesystem.
+ *
+ * Features:
+ * - Stable route IDs via @route annotations
+ * - Automatic aliases for backward compatibility
+ * - Optional recursive aliasing for index routes (--ra)
+ * - Index-only mode for clean, folder-based mappings (--index)
+ *
+ * Usage:
+ *   php uri-mapper.php <path> [--php] [--index] [--ra] [--strict] [--dry-run] [--json]
+ *
+ * @author Eril TS Carvalho
+ * @license MIT
+ * @package eril/uri-mapper
+ * @since 2025/12
+ * @version 1.0.0
+ */
+
+
+if ($argc < 2) {
+    fwrite(
+        STDERR,
+        "Usage: php uri-mapper.php <path> [--php] [--index] [--ra] [--strict] [--dry-run] [--json]\n" .
+            "\033[1;30mdoc: https://github.com/erilshackle/php-uri-mapper/README\033[0m"
+    );
+    exit(1);
+}
+
+
+/* ============================================================
+   Infra
+   ============================================================ */
+
+function warn(string $msg): void
+{
+    fwrite(STDERR, "[warn] {$msg}\n");
+}
+function info(string $msg): void
+{
+    fwrite(STDOUT, "{$msg}\n");
+}
+function fail(string $msg): never
+{
+    fwrite(STDERR, "[error] {$msg}\n");
+    exit(1);
+}
+
+/* ============================================================
+   Parse args
+   ============================================================ */
+
+$baseDir      = realpath($argv[1]);
+$indexOnly    = false;
+$keepPhpExt   = false;
+$strict       = false;
+$dryRun       = false;
+$json         = false;
+$recursiveAlias = false;
+
+if ($baseDir === false || !is_dir($baseDir)) {
+    fail("Invalid path: {$argv[1]}");
+}
+
+foreach ($argv as $arg) {
+    match ($arg) {
+        '--php'     => $keepPhpExt = true,
+        '--index'     => $indexOnly = true,
+        '--strict'  => $strict = true,
+        '--dry-run' => $dryRun = true,
+        '--json'    => $json = true,
+        '--ra'      => $recursiveAlias = true,
+        default     => null,
+    };
+}
+
+/* ============================================================
+   Helpers de domínio
+   ============================================================ */
+
+function normalizeRouteName(string $uri): string
+{
+    $uri = trim($uri, '/');
+    if ($uri === '') return 'home';
+    $segments = explode('/', $uri);
+    $parts = [];
+    foreach ($segments as $segment) {
+        $sub = explode('-', $segment);
+        $camel = array_shift($sub);
+        foreach ($sub as $s) {
+            $camel .= ucfirst($s);
+        }
+        $parts[] = $camel;
+    }
+    return implode('_', $parts);
+}
+
+function extractRouteId(string $file): ?string
+{
+    $fh = fopen($file, 'r');
+    if (!$fh) return null;
+    $lines = 0;
+    while (($line = fgets($fh)) !== false && $lines < 10) {
+        if (preg_match('/@route\s+([a-z][a-zA-Z0-9_]*)/', $line, $m)) {
+            fclose($fh);
+            return $m[1];
+        }
+        $lines++;
+    }
+    fclose($fh);
+    return null;
+}
+
+/* ============================================================
+   Mapper
+   ============================================================ */
+
+function mapRoutes(string $baseDir,  bool $indexOnly, bool $keepPhpExt, bool $strict, bool $recursiveAlias): array
+{
+    $routes  = [];
+    $aliases = [];
+    $indexDirs = []; // dirs de index.php com alias, para recursivo
+
+    $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($baseDir));
+
+    foreach ($iterator as $file) {
+        if (!$file->isFile() || $file->getExtension() !== 'php') continue;
+
+        if ($indexOnly && basename($file->getPathname()) !== 'index.php') {
+            continue;
+        }
+
+        $path = str_replace($baseDir, '', $file->getPathname());
+        $path = str_replace('\\', '/', $path);
+
+        if (str_starts_with($path, '/@auth')) {
+            $path = substr($path, 6);
+        }
+
+        if (!preg_match('#^[a-zA-Z0-9/_\-\.]+$#', $path)) {
+            if ($strict) fail("Invalid characters in path: {$path}");
+            warn("Ignored invalid file: {$path}");
+            continue;
+        }
+
+        // URI + auto name
+        if ($path === '/index.php') {
+            $uri = '/';
+            $autoName = 'home';
+        } else {
+            // path lógico (SEMPRE sem .php)
+            $logicalPath = preg_replace('#/index\.php$#', '/', $path);
+            $logicalPath = preg_replace('#\.php$#', '/', $logicalPath);
+
+            // uri final (respeita --php)
+            $uri = preg_replace('#/index\.php$#', '/', $path);
+            if (!$keepPhpExt) {
+                $uri = preg_replace('#\.php$#', '/', $uri);
+            }
+
+            // nome da rota SEMPRE baseado no path lógico
+            $autoName = normalizeRouteName($logicalPath);
+        }
+
+        if (!preg_match('/^[a-z][a-zA-Z0-9_]*$/', $autoName)) {
+            if ($strict) fail("Invalid route name: {$autoName}");
+            warn("Ignored route with invalid name: {$autoName}");
+            continue;
+        }
+
+        $routeId = extractRouteId($file->getPathname());
+        $name    = $routeId ?? $autoName;
+
+        if ($routeId !== null && $autoName !== $routeId) {
+            if (isset($aliases[$autoName]) && $aliases[$autoName] !== $routeId) {
+                if ($strict) fail("Alias collision: {$autoName}");
+                warn("Alias '{$autoName}' reassigned");
+            }
+            $aliases[$autoName] = $routeId;
+        }
+
+        if (isset($routes[$name]) && $routes[$name] !== $uri) {
+            if ($strict) fail("Route ID collision: {$name}");
+            warn("Route '{$name}' already defined, ignoring {$uri}");
+            continue;
+        }
+
+        $routes[$name] = $uri;
+
+        // marca index.php com alias para recursivo
+        if ($recursiveAlias && basename($path) === 'index.php' && isset($aliases[$name])) {
+            $indexDirs[$file->getPath()] = $aliases[$name];
+        }
+    }
+
+    // Aplica alias recursivo
+    if ($recursiveAlias) {
+        foreach ($indexDirs as $dir => $alias) {
+            $objects = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir));
+            foreach ($objects as $subfile) {
+                if (!$subfile->isFile() || $subfile->getExtension() !== 'php') continue;
+                if (basename($subfile->getPathname()) === 'index.php') continue; // já mapeado
+                $subPath = str_replace($dir, '', $subfile->getPathname());
+                $subPath = str_replace('\\', '/', $subPath);
+                $subName = normalizeRouteName('/' . $subPath);
+                if (!isset($aliases[$subName]) && !isset($routes[$subName])) {
+                    $aliases[$subName] = $alias;
+                }
+            }
+        }
+    }
+
+    ksort($routes);
+    ksort($aliases);
+
+    return [$routes, $aliases];
+}
+
+/* ============================================================
+   Gerador de classe Uri
+   ============================================================ */
+
+function generateUriClass(string $className, array $routes, array $aliases): string
+{
+    $out = "<?php\n\nfinal class {$className}\n{\n";
+    foreach ($routes as $name => $uri) {
+        $out .= "    public const {$name} = '{$uri}';\n";
+    }
+    if ($aliases) {
+        $out .= "\n    private const _aliases = [\n";
+        foreach ($aliases as $from => $to) {
+            $out .= "        '{$from}' => '{$to}',\n";
+        }
+        $out .= "    ];\n";
+    }
+
+    $out .= <<<PHP
+
+    public static function __callStatic(string \$name, array \$args): string
+    {
+        if (!defined(self::class . '::' . \$name)) {
+            if (defined(self::class . '::_aliases') && isset(self::_aliases[\$name])) {
+                \$name = self::_aliases[\$name];
+            } else {
+                throw new \RuntimeException("URI '{\$name}' not found.");
+            }
+        }
+
+        \$base = constant(self::class . '::' . \$name);
+
+        if (empty(\$args)) {
+            return \$base;
+        }
+
+        \$first = \$args[0];
+
+        /**
+         * NEW: relative path + optional params
+         * Uri::admin('/users/{id}', ['id' => 1])
+         */
+        if (is_string(\$first) && str_starts_with(\$first, '/')) {
+            \$path   = \$first;
+            \$params = \$args[1] ?? [];
+
+            if (!empty(\$params)) {
+                foreach (\$params as \$key => \$value) {
+                    \$path = str_replace(
+                        '{' . \$key . '}',
+                        rawurlencode((string) \$value),
+                        \$path
+                    );
+                }
+            }
+
+            return rtrim(\$base, '/') . \$path;
+        }
+
+        /**
+         * Existing behavior
+         */
+        if (is_string(\$first)) {
+            return rtrim(\$base, '/') . '/' . rawurlencode(\$first) . '/';
+        }
+
+        if (is_array(\$first)) {
+            return rtrim(\$base, '/') . '/?' . http_build_query(\$first);
+        }
+
+        throw new \InvalidArgumentException(
+            "Invalid argument for URI '{\$name}'"
+        );
+    }
+
+    /* ========================
+       Helpers de request
+       ======================== */
+
+    public static function uri(\$to = ''): string
+    {
+        \$uri = strtok(\$_SERVER['REQUEST_URI'] ?? '/', '?');
+        return rtrim(\$uri, '/') . '/' . rawurlencode(\$to) . '/';
+    }
+
+}
+PHP;
+
+    return $out;
+}
+
+/* ============================================================
+   Execução
+   ============================================================ */
+
+[$routes, $aliases] = mapRoutes($baseDir, $indexOnly, $keepPhpExt, $strict, $recursiveAlias);
+
+if ($json) {
+    echo json_encode(['routes' => $routes, 'aliases' => $aliases], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+    exit;
+}
+
+$code = generateUriClass('Uri', $routes, $aliases);
+
+if ($dryRun) {
+    info("Dry-run mode enabled. File not written.");
+    exit;
+}
+
+file_put_contents(getcwd() . '/Uri.php', $code);
+info("✔ File written: Uri.php");
+info("✔ " . count($routes) . " routes processed");
+info("✔ " . count($aliases) . " aliases generated");

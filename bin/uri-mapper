@@ -231,13 +231,16 @@ function generateUriClass(string $className, array $routes, array $aliases): str
     foreach ($routes as $name => $uri) {
         $out .= "    public const {$name} = '{$uri}';\n";
     }
+
+    $out .= "\n    private const _aliases = [";
     if ($aliases) {
-        $out .= "\n    private const _aliases = [\n";
+        $out .= "\n";
         foreach ($aliases as $from => $to) {
             $out .= "        '{$from}' => '{$to}',\n";
-        }
-        $out .= "    ];\n";
+        } 
+        $out .="    ";
     }
+    $out .= "];\n";
 
     $out .= <<<PHP
 

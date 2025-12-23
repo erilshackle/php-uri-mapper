@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Initial commit: PHP URI Mapper v1.0.0
 - CLI script `bin/uri-mapper` to generate named URI catalog from filesystem
+- update: add test checklist and minor fixes
 - Stable URI IDs via `@route` annotations
 - Automatic aliases for backward compatibility
 - Optional recursive aliasing for index routes (`--ra`)
@@ -21,3 +22,6 @@ All notable changes to this project will be documented in this file.
 - Comprehensive README.md with usage examples and design philosophy
 - Composer support via `composer.json`
 - MIT license
+
+### Changed
+- docs: create CHANGELOG.md

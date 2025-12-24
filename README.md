@@ -32,7 +32,7 @@ you decide how much or how little you want it to map.
 
 - Stable URI IDs via `@route` annotations
 - Automatic aliases for backward compatibility
-- Optional recursive aliasing for index routes (`--ra`)
+
 - Index-only mode for clean, folder-based mappings (`--index`)
 - Optional `.php` preservation in generated URIs (`--php`)
 - Explicit URI composition via relative paths
@@ -151,20 +151,6 @@ Uri::admin('users');    // /admin/users/
 ```
 
 Without generating leaf routes like `Uri::adminUsers()`.
-
----
-
-## Recursive Aliases (`--ra`)
-
-When enabled, **aliases** defined on `index.php` files can be applied *recursively to subpaths*:
-
-```bash
-vendor/bin/uri-mapper ./routes --ra
-```
-
-Explicit route IDs always take precedence over recursive aliases.
-
-This feature is optional and disabled by default.
 
 ---
 

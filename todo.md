@@ -23,7 +23,7 @@ Checklist to verify each feature and CLI parameters.
 - [x] Ignores leaf PHP files
 
 ### `--ra` (Recursive Aliases)
-- [x] Applies alias recursively to subpaths of index.php
+- [ ] Applies alias recursively to subpaths of index.php
 - [x] Does not override explicit route IDs
 - [x] Works with multiple index folders
 

@@ -13,7 +13,7 @@
  * - Index-only mode for clean, folder-based mappings (--index)
  *
  * Usage:
- *   php uri-mapper.php <path> [--php] [--index] [--ra] [--strict] [--dry-run] [--json]
+ *   php uri-mapper.php <path> [--php] [--index] [--strict] [--dry-run] [--json]
  *
  * @author Eril TS Carvalho
  * @license MIT
@@ -26,7 +26,7 @@
 if ($argc < 2) {
     fwrite(
         STDERR,
-        "Usage: php uri-mapper.php <path> [--php] [--index] [--ra] [--strict] [--dry-run] [--json]\n" .
+        "Usage: php uri-mapper.php <path> [--php] [--index] [--strict] [--dry-run] [--json]\n" .
             "\033[1;30mdoc: https://github.com/erilshackle/php-uri-mapper\033[0m"
     );
     exit(1);
@@ -55,13 +55,13 @@ function fail(string $msg): never
    Parse args
    ============================================================ */
 
+$index        = 0;
 $baseDir      = realpath($argv[1]);
 $indexOnly    = false;
 $keepPhpExt   = false;
 $strict       = false;
 $dryRun       = false;
 $json         = false;
-$recursiveAlias = false;
 
 if ($baseDir === false || !is_dir($baseDir)) {
     fail("Invalid path: {$argv[1]}");
@@ -70,13 +70,13 @@ if ($baseDir === false || !is_dir($baseDir)) {
 foreach ($argv as $arg) {
     match ($arg) {
         '--php'     => $keepPhpExt = true,
-        '--index'     => $indexOnly = true,
+        '--index'   => $indexOnly = true,
         '--strict'  => $strict = true,
         '--dry-run' => $dryRun = true,
         '--json'    => $json = true,
-        '--ra'      => $recursiveAlias = true,
-        default     => null,
+        default     => $index > 1 ? warn("Unknown argument ignored: $arg") : null,
     };
+    $index++;
 }
 
 /* ============================================================
@@ -120,11 +120,10 @@ function extractRouteId(string $file): ?string
    Mapper
    ============================================================ */
 
-function mapRoutes(string $baseDir,  bool $indexOnly, bool $keepPhpExt, bool $strict, bool $recursiveAlias): array
+function mapRoutes(string $baseDir,  bool $indexOnly, bool $keepPhpExt, bool $strict): array
 {
     $routes  = [];
     $aliases = [];
-    $indexDirs = []; // dirs de index.php com alias, para recursivo
 
     $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($baseDir));
 
@@ -191,28 +190,6 @@ function mapRoutes(string $baseDir,  bool $indexOnly, bool $keepPhpExt, bool $st
         }
 
         $routes[$name] = $uri;
-
-        // marca index.php com alias para recursivo
-        if ($recursiveAlias && basename($path) === 'index.php' && isset($aliases[$name])) {
-            $indexDirs[$file->getPath()] = $aliases[$name];
-        }
-    }
-
-    // Aplica alias recursivo
-    if ($recursiveAlias) {
-        foreach ($indexDirs as $dir => $alias) {
-            $objects = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir));
-            foreach ($objects as $subfile) {
-                if (!$subfile->isFile() || $subfile->getExtension() !== 'php') continue;
-                if (basename($subfile->getPathname()) === 'index.php') continue; // já mapeado
-                $subPath = str_replace($dir, '', $subfile->getPathname());
-                $subPath = str_replace('\\', '/', $subPath);
-                $subName = normalizeRouteName('/' . $subPath);
-                if (!isset($aliases[$subName]) && !isset($routes[$subName])) {
-                    $aliases[$subName] = $alias;
-                }
-            }
-        }
     }
 
     ksort($routes);
@@ -316,7 +293,7 @@ PHP;
    Execução
    ============================================================ */
 
-[$routes, $aliases] = mapRoutes($baseDir, $indexOnly, $keepPhpExt, $strict, $recursiveAlias);
+[$routes, $aliases] = mapRoutes($baseDir, $indexOnly, $keepPhpExt, $strict);
 
 if ($json) {
     echo json_encode(['routes' => $routes, 'aliases' => $aliases], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";

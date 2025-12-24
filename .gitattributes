@@ -1,4 +1,4 @@
-.gitignore  -ignore-export
-.README.md  -ignore-export
-.todo.md    -ignore-export
-.todo.md    -ignore-export
+.gitattributes  export-ignore
+.gitignore      export-ignore
+README.md      export-ignore
+todo.md        export-ignore

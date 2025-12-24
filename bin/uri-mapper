@@ -79,6 +79,10 @@ foreach ($argv as $arg) {
     $index++;
 }
 
+if($keepPhpExt && $indexOnly){
+    info("--php will not have any effect with --index option");
+}
+
 /* ============================================================
    Helpers de domínio
    ============================================================ */
